@@ -9,6 +9,7 @@ Python Interface for the Unitree D1 Arm
 Unitree Python SDK: [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python)
 
 **d1py_sdk**
+
 The `d1py_sdk` is part of this project. It was implemented as a python version of [d1_sdk](https://unitree-firmware.oss-cn-hangzhou.aliyuncs.com/tool/d1_sdk.zip) by Unitree.
 
 ## How to Use
@@ -22,7 +23,7 @@ The `d1py_sdk` is part of this project. It was implemented as a python version o
  cd D1Py 
  pip install -e .
  ```
- 
+
 3.  **Import and use `D1Arm`**:
    ```python
    from d1py.interface import D1Arm
@@ -30,6 +31,7 @@ The `d1py_sdk` is part of this project. It was implemented as a python version o
    ```
 
 **Available Functions:**
+
 `set_joint(id, angle, delay=0)`: Move a single joint to `angle` (°) after `delay` ms.
 
 `set_all_joints(angles, mode=0)`: Move all joints; `angles` must be a 7-element list. `mode`: `0` = 10 Hz smoothing, `1` = trajectory smoothing.
