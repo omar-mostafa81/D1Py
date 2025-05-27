@@ -1,6 +1,8 @@
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber, ChannelPublisher
 from .d1py_sdk.msgs.ArmString import ArmString_
 from .d1py_sdk.msgs.PubServoInfo import PubServoInfo_
+from threading import Event
+
 import time
 import sys
 import json
@@ -9,7 +11,9 @@ interface = "enx803f5dfb42af"
 
 class D1Arm():
     def __init__(self):
-        if len(sys.argv) > 1:
+        is_jupyter = 'ipykernel' in sys.modules
+
+        if not is_jupyter and len(sys.argv) > 1:
             ChannelFactoryInitialize(0, sys.argv[1])
         else:
             ChannelFactoryInitialize(0, interface)
@@ -20,12 +24,14 @@ class D1Arm():
         self.motor_online_status = None          # from address=2, funcode=4
         self.recv_status_feedback = None         # from address=3, funcode=1
         self.exec_status_feedback = None         # from address=3, funcode=2
-        self.latest_arm_feedback = None
+        self.recv_status_event = Event()
+        self.exec_status_event = Event()
+        self.latest_arm_feedback = {}
 
         self.sub_servo = ChannelSubscriber("current_servo_angle", PubServoInfo_)
-        self.sub_arm = ChannelSubscriber("arm_Feedback", ArmString_)
+        self.sub_arm = ChannelSubscriber("rt/arm_Feedback", ArmString_)
         self.sub_servo.Init(self.handler_servo)
-        self.sub_arm.Init(self.handler_arm_feedback, 10)
+        self.sub_arm.Init(self.handler_arm_feedback)
 
         # Control data
         self.CMD_TOPIC = "rt/arm_Command"
@@ -59,6 +65,7 @@ class D1Arm():
         """
         returns the latest received motor online state data.
         """
+        raise NotImplementedError
         start_time = time.time()
         while time.time() - start_time < 1:
             if self.motor_online_status:
@@ -140,16 +147,23 @@ class D1Arm():
             # Reception success feedback
             self.recv_status_feedback = payload
             self.latest_arm_feedback["recv_status"] = payload
+            if payload.get("recv_status") == 1:
+                self.recv_status_event.set()
 
         elif address == 3 and funcode == 2:
             # Command execution feedback
             self.exec_status_feedback = payload
             self.latest_arm_feedback["exec_status"] = payload
+            if payload.get("exec_status") == 1:
+                self.exec_status_event.set()
 
     ####### Control Functions ########
     def reset(self):
         """ robotic arm posture returns to zero
         """
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
         pub = ChannelPublisher(self.CMD_TOPIC, ArmString_)
         pub.Init()
 
@@ -168,6 +182,9 @@ class D1Arm():
         "angle": joint target angle
         "delay_ms": execution time
         """
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
         if id not in range(7):
             raise ValueError("ID must be int from 0 to 6")
         
@@ -188,6 +205,9 @@ class D1Arm():
         "mode": mode 0 is the small smoothing of 10Hz data, and mode 1 is the large smoothing of trajectory use
         "angles": list of desired angles
         """
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
         if len(angles) != 7:
             raise ValueError("Must provide exactly 7 joint angles")
         if mode not in [0, 1]:
@@ -205,14 +225,17 @@ class D1Arm():
 
         pub.Close()
     
-    def force_discharge_joint(self, id, mode):
+    def set_ServoDamping_joint(self, id, mode):
         """ Enable/force discharge control of a single manipulator joint motor.
         Args:
             id: joint id
-            mode: 0 = release force, 1 = enable force discharge
+            mode: 0 = totally release force, >1000 = high damping
         """
-        if mode not in [0, 1]:
-            raise ValueError("Mode must be 0 (release force) or 1 (enable force discharge)")
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
+        # if mode not in [0, 1]:
+        #     raise ValueError("Mode must be 0 (release force) or 1 (enable force discharge)")
         if id not in range(7):
             raise ValueError("ID must be int from 0 to 6")
         
@@ -229,13 +252,16 @@ class D1Arm():
         pub.Close()
 
 
-    def force_discharge_all(self, mode):
+    def set_ServoDamping_all(self, mode):
         """ Enable/force discharge control of all mechanical arm joint motors.
         Args:
-            mode: 0 = release force, 1 = enable force discharge
+            mode: 0 = totally release force, >1000 = high damping
         """
-        if mode not in [0, 1]:
-            raise ValueError("Mode must be 0 (release force) or 1 (enable force discharge)")
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
+        # if mode not in [0, 1]:
+        #     raise ValueError("Mode must be 0 (release force) or 1 (enable force discharge)")
         
         pub = ChannelPublisher(self.CMD_TOPIC, ArmString_)
         pub.Init()
@@ -255,6 +281,10 @@ class D1Arm():
         Args:
             mode (int): 0 = power off, 1 = power on
         """
+        raise NotImplementedError
+        self.recv_status_event.clear()
+        self.exec_status_event.clear()
+
         if mode not in [0, 1]:
             raise ValueError("Mode must be 0 (off) or 1 (on)")
 
